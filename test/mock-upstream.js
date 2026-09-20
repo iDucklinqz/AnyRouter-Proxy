@@ -109,6 +109,16 @@ http.createServer((req, res) => {
       return;
     }
 
+    // —— 连接超时/重试测试模式 ——
+    if (mode === 'slowheadersonce') {
+      // 首次:超过 1s 才发响应头(触发 CONNECT 超时重试);之后立即正常
+      if (hitNo === 1) { setTimeout(() => { res.flushHeaders(); runNormal(); }, 2000); return; }
+      runNormal();
+      return;
+    }
+    if (mode === 'hangup') { res.socket.destroy(); return; } // 响应头前直接挂断
+    if (mode === 'blackhole') return;                        // 连响应头都不发
+
     runNormal();
   });
 }).listen(9091, '127.0.0.1', () => console.log('[mock] 中转站模拟器已启动: http://127.0.0.1:9091'));

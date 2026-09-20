@@ -70,6 +70,10 @@ const FIRST_EVENT_TIMEOUT_MS = Number(process.env.FIRST_EVENT_TIMEOUT_MS || 90_0
 const UPSTREAM_RETRIES = Math.max(0, Number(process.env.UPSTREAM_RETRIES ?? 2));
 const RETRY_DELAY_MS = Math.max(0, Number(process.env.RETRY_DELAY_MS ?? 1000));
 
+// 上游"连接 + 响应头"超时:超过视为本次尝试失败并重试(0 = 不限时)。
+// 中转站排队时可能迟迟不给响应头,过短会误杀,默认 60 秒
+const CONNECT_TIMEOUT_MS = Number(process.env.CONNECT_TIMEOUT_MS ?? 60_000);
+
 const HOP_BY_HOP = new Set([
   'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
   'te', 'trailer', 'transfer-encoding', 'upgrade',
@@ -212,18 +216,25 @@ const server = http.createServer((req, res) => {
         proxySSE(upReq, upRes, status, outHeaders, () => scheduleRetry('上游空回复'));
       });
 
+      // 同一次尝试的 socket 可能接连弹出多个错误(超时 destroy 后再来一个 ECONNRESET),
+      // 只处理第一个,否则重试被重复安排、尝试次数被虚耗。
+      // 注意:置位只在下方错误处理器里做——超时回调若提前置位,emit 的错误会被自己吞掉
+      let failureHandled = false;
       upReq.on('socket', (s) => {
-        s.setTimeout(15_000, () => {
-          if (!gotResponse) {
-            s.destroy();
-            upReq.emit('error', new Error('upstream connect/response timeout (15s)'));
-          }
-        });
+        if (CONNECT_TIMEOUT_MS > 0) {
+          s.setTimeout(CONNECT_TIMEOUT_MS, () => {
+            if (!gotResponse && !failureHandled) {
+              s.destroy();
+              upReq.emit('error', new Error(`upstream connect/response timeout (${Math.round(CONNECT_TIMEOUT_MS / 1000)}s)`));
+            }
+          });
+        }
       });
 
-      // 响应头之前的一切失败(连接错误/15s 超时)都走重试;响应头之后由 proxySSE 自行处理
+      // 响应头之前的一切失败(连接错误/连接超时)都走重试;响应头之后由 proxySSE 自行处理
       upReq.on('error', (err) => {
-        if (gotResponse || res.headersSent || res.writableEnded || res.destroyed) return;
+        if (failureHandled || gotResponse || res.headersSent || res.writableEnded || res.destroyed) return;
+        failureHandled = true;
         failOrRetry(err);
       });
 
