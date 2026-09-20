@@ -1,6 +1,15 @@
-# Claude Code 前置路由(cc-proxy)
+# Claude Code 前置路由(anyrouter-proxy)
 
-解决部分中转站的顽疾:**SSE 输出 `message_stop` 之后不关闭连接**,导致 Claude Code 每轮结束后要干等超时(约 30 秒)才能进入下一轮。
+一个开源的奇异搞笑路由器 由Doubao-Seed-2.1-Bro™和Doubao™网页端编写而成。纯vibe无手写。
+
+# 奇异搞笑
+
+<img width="220" alt="9793fce877f325893985f2d9d5ff806f" src="https://github.com/user-attachments/assets/1ae4787a-e4e9-4510-b19b-6c92ae30b566" />
+<img width="220" alt="75b31b870ec0e266782e07ce153e5992" src="https://github.com/user-attachments/assets/1258bcae-1d78-4b38-91d2-e2c74ed94de0" />
+<img width="220" alt="f0980613c8a1262f076bfecaa0f1f3cc" src="https://github.com/user-attachments/assets/68f0b9b2-0100-4c87-9662-91baf868ed90" />
+<img width="220" alt="1c55ece3f756d0019d52d18acaacc2a7" src="https://github.com/user-attachments/assets/fdd79760-ddf2-41bd-b095-29faf526c8aa" />
+<img width="220" alt="43776a846ca9d4bc65db010d5bf25457" src="https://github.com/user-attachments/assets/c2e6596c-2c5d-4ae2-973b-6f0892b1f7fc" />
+<img width="220" alt="ebf87da541869da9d0ac5b0a5b127c7c" src="https://github.com/user-attachments/assets/e2e54592-c863-4113-84e7-0afa56960459" />
 
 本代理在本机 `127.0.0.1:8118` 起一个 HTTP 服务,把 Claude Code 的请求原样转发给上游 `https://你的中转站域名`,并对流式响应做"结束即断":`message_stop` 事件一完整输出,立刻结束响应、断开上游,CC 马上进入下一轮。
 
