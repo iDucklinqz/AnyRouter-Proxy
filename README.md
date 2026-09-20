@@ -1,6 +1,10 @@
 # Claude Code 前置路由(anyrouter-proxy)
 
-一个开源的奇异搞笑路由器 由Doubao-Seed-2.1-Bro™和Doubao™网页端编写而成。纯vibe无手写。
+一个开源的奇异搞笑路由器 由Doubao-Seed-2.1-Bro™和Doubao™网页端编写而成。100%vibe无手写。
+<img width="298" height="184" alt="image" src="https://github.com/user-attachments/assets/72023c82-a1f6-4b8c-a68f-65ede56eb6d5" />
+<img width="128" height="128" alt="image" src="https://github.com/user-attachments/assets/73dc0edc-f086-4ccd-8564-57f286c366be" />
+
+> ⚠️ 本仓库仅供学习与研究目的发布。若使用导致账号遭到禁令，请自行承担后果。
 
 # 奇异搞笑
 
@@ -11,7 +15,7 @@
 <img width="220" alt="43776a846ca9d4bc65db010d5bf25457" src="https://github.com/user-attachments/assets/c2e6596c-2c5d-4ae2-973b-6f0892b1f7fc" />
 <img width="220" alt="ebf87da541869da9d0ac5b0a5b127c7c" src="https://github.com/user-attachments/assets/e2e54592-c863-4113-84e7-0afa56960459" />
 
-本代理在本机 `127.0.0.1:8118` 起一个 HTTP 服务,把 Claude Code 的请求原样转发给上游 `https://你的中转站域名`,并对流式响应做"结束即断":`message_stop` 事件一完整输出,立刻结束响应、断开上游,CC 马上进入下一轮。
+# 嗯对
 
 单文件、零依赖,只要装了 Node(≥18,CC 本身就依赖它)即可运行。
 
