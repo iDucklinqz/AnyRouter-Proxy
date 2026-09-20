@@ -1,0 +1,79 @@
+# Claude Code 前置路由(cc-proxy)
+
+解决部分中转站的顽疾:**SSE 输出 `message_stop` 之后不关闭连接**,导致 Claude Code 每轮结束后要干等超时(约 30 秒)才能进入下一轮。
+
+本代理在本机 `127.0.0.1:8118` 起一个 HTTP 服务,把 Claude Code 的请求原样转发给上游 `https://你的中转站域名`,并对流式响应做"结束即断":`message_stop` 事件一完整输出,立刻结束响应、断开上游,CC 马上进入下一轮。
+
+单文件、零依赖,只要装了 Node(≥18,CC 本身就依赖它)即可运行。
+
+## 用法
+
+**1. 启动代理**(任选其一):
+
+```bat
+:: 方式一:直接跑(默认上游读同目录 default-upstream.txt,详见下文)
+node cc-proxy.js
+
+:: 方式二:自定义端口 / 上游
+node cc-proxy.js 8118 https://你的中转站域名
+:: 或用环境变量:PORT=8118 UPSTREAM=https://你的中转站域名 node cc-proxy.js
+```
+
+**2. 让 Claude Code 走代理**。Key 保持你现在的配置不变(`ANTHROPIC_AUTH_TOKEN` 或 `ANTHROPIC_API_KEY`,代理原样透传,不改写任何鉴权头),只需把 Base URL 指到本机:
+
+```bat
+:: cmd
+set ANTHROPIC_BASE_URL=http://127.0.0.1:8118
+claude
+```
+
+```powershell
+# PowerShell
+$env:ANTHROPIC_BASE_URL = "http://127.0.0.1:8118"
+claude
+```
+
+想永久生效,写进 `~/.claude/settings.json`:
+
+```json
+{ "env": { "ANTHROPIC_BASE_URL": "http://127.0.0.1:8118" } }
+```
+
+**懒人方式**:双击 `start-cc.bat` —— 启动时让你输入上游地址:
+
+- 直接回车 = 使用默认上游(同目录 `default-upstream.txt`,该文件不入库,写一次你的地址即可)
+- 也可以当参数传:`start-cc.bat https://你的中转站域名`
+- 重复执行会自动停掉旧实例、按新输入的上游重启
+
+Key 任何时候都不用在脚本里输入:CC 请求带什么 Key(`ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY`),代理就原样透传什么。
+
+## 行为说明
+
+- 请求侧:`method / path / body` 及所有头(`authorization`、`x-api-key`、`anthropic-version` 等)原样透传,仅改写 `Host`、`Accept-Encoding`(强制明文以便扫描)和 `Content-Length`。
+- 流式响应(`text/event-stream`):逐事件透传;`message_stop` 完整输出后立即 `end()` 并掐断上游连接。
+  - 用 Buffer 按 SSE 空行边界切事件,`message_stop` 跨 chunk、中文多字节截断都不会误判/乱码;
+  - 判定只认 `data:` 行 JSON 的 `type:"message_stop"`(或 `event: message_stop` 行),模型正文里恰好写出 `{"type":"message_stop"}` 的示例代码不会误触发;
+  - 兜底:个别中转站连事件结束空行都不发,只要 `data` 行完整也会补齐并断开。
+- 非流式及其他路径(count_tokens 等):纯管道透传,不做任何干预。
+- 空回复治理:流式响应在收到首个 `content_block_delta` 前不向 CC 发响应头;若流结束/中断/超时仍没有任何内容(含"只有 ping""只有 message_start/stop 的空消息"等形态),不转发,改返回 **529 overloaded_error**(CC 会自动重试)。空闲上限默认 90 秒,可用环境变量 `FIRST_EVENT_TIMEOUT_MS` 调整(0 = 不限时);上游返回 4xx/5xx 时不做此改造,原样透传由 CC 自行处理。
+- 代理层自动重试:上游 5xx(520/529 等)、连接失败、空回复,只要还没向 CC 转发过任何字节,代理先内部重试——默认重试 2 次、间隔 1 秒(环境变量 `UPSTREAM_RETRIES` / `RETRY_DELAY_MS` 可调),瞬时抖动对 CC 完全透明;额度用尽才把最后的错误交给 CC(5xx 原样、空回复转 529、连接错误转 502)。
+- 上游经本地代理:https 上游默认经 `127.0.0.1:10808` 以 CONNECT 隧道转发(实测该中转站直连会被 TLS 拒绝)。优先取环境变量 `HTTPS_PROXY`/`https_proxy` 等(CC 同样遵循),没有时用内置默认——终端注入的代理变量(如 ZCode)对双击启动的进程无效,内置默认不可少;设 `UPSTREAM_PROXY=direct` 或 `NO_PROXY` 可强制直连。
+- 连接兜底:上游"连接 + 响应头"15 秒内未到达即返回 502(地址协议写错、代理挂了等都不会无限挂起);响应头到达后不再限时,慢速流式不受影响。
+- CC 侧主动中断(按 Esc)时,同步掐断上游。
+- 每个请求在代理窗口打一行日志(状态、耗时、是否提前断开),方便观察。
+
+## 文件
+
+| 文件 | 说明 |
+| --- | --- |
+| `cc-proxy.js` | 代理主体,单文件零依赖 |
+| `start-cc.bat` | 启动代理(上游地址可作参数传入或运行时输入;重复执行自动重启旧实例) |
+| `test/mock-upstream.js` | 模拟"不关连接"的中转站,用于本地回归测试 |
+| `default-upstream.txt` | (可选,本地文件不入库)写入你的默认上游地址,`start-cc.bat` 回车即用它 |
+
+## 已验证(本地端到端)
+
+- 原问题复现:直连模拟中转站,连接永不关闭,客户端只能干等超时;走本代理后完整收到全部事件(含 220KB 中文、正文陷阱文本、跨 chunk 拆包的 `message_stop`),**0.35 秒**即返回。
+- Key / anthropic-version 等头原样到达上游;非流式 4ms 透传。
+- 启动脚本:参数传入与直接回车两种方式均正常;重复执行自动重启旧实例;bat 内保持 ASCII(GBK 控制台下 UTF-8 中文会被错误解析)。
+- 真实上游:直连 TLS 被拒(alert 40),经 `HTTPS_PROXY` 隧道后假 key 得到上游 401(链路全通,未消耗配额);错协议上游 0.01 秒返回 502。

@@ -1,0 +1,4 @@
+default-upstream.txt
+*.log
+node_modules/
+__pycache__/
