@@ -44,7 +44,7 @@ if defined UPSTREAM_INPUT (
 )
 
 echo [cc-proxy] starting front proxy at http://127.0.0.1:%PROXY_PORT% ...
-node "%~dp0cc-proxy.js"
+node "%~dp0cc-proxy.js" %PROXY_PORT%
 echo [cc-proxy] proxy exited.
 pause
 endlocal
