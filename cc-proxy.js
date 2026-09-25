@@ -71,8 +71,8 @@ const UPSTREAM_RETRIES = Math.max(0, Number(process.env.UPSTREAM_RETRIES ?? 2));
 const RETRY_DELAY_MS = Math.max(0, Number(process.env.RETRY_DELAY_MS ?? 1000));
 
 // 上游"连接 + 响应头"超时:超过视为本次尝试失败并重试(0 = 不限时)。
-// 中转站排队时可能迟迟不给响应头,过短会误杀,默认 60 秒
-const CONNECT_TIMEOUT_MS = Number(process.env.CONNECT_TIMEOUT_MS ?? 60_000);
+// 中转站排队时可能迟迟不给响应头,过短会误杀,默认 600 秒
+const CONNECT_TIMEOUT_MS = Number(process.env.CONNECT_TIMEOUT_MS ?? 600_000);
 
 const HOP_BY_HOP = new Set([
   'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
